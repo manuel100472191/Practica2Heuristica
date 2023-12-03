@@ -1,0 +1,1 @@
+python3 ASTARTraslados.py ASTAR-tests/mapa.csv 1
