@@ -22,8 +22,8 @@ def generar_matriz(path_mapa) -> [[str]] :
     return mtrx
 
 class Ambulancia:
-    def __init__(self, mapa: [[str],], posicion: list ,pacientes_no_contagiosos: list(str)
-                 , pacientes_contagiosos: list(str), energia: int
+    def __init__(self, mapa: [[str],], posicion: list ,pacientes_no_contagiosos: [str,]
+                 , pacientes_contagiosos: [str,], energia: int
                  , recogiendo_contagiosos: bool = False) -> None:
         self.asientos_contagiosos = pacientes_contagiosos
         self.asientos_no_contagiosos = pacientes_no_contagiosos
@@ -32,7 +32,7 @@ class Ambulancia:
         self.mapa = mapa
         self.recogiendo_contagiosos = recogiendo_contagiosos
 
-    def logica_iteracion(self):
+    def logica_iteracion(self) -> None:
         casilla_actual = self.mapa[self.posicion[0]][self.posicion[1]]
         if casilla_actual == "N":
             if not self.recogiendo_contagiosos:
@@ -81,9 +81,63 @@ class Ambulancia:
 
 
 class Estado:
-    def __init__(self, mapa: [[str]], ambulancia: Ambulancia) -> None:
+    def __init__(self, mapa: [[str,],], pos_vehiculo: [str,], asientos_contagiados: [str,], asientos_no_contagiados: [str,], energia: int) -> None:
         self.mapa = mapa
-        self.ambulancia = ambulancia
+        self.pos_vehiculo = pos_vehiculo
+        self.asientos_contagiados = asientos_contagiados
+        self.asientos_no_contagiados = asientos_no_contagiados
+        self.energia = energia
+
+    def generar_estados(self):
+        ...
+
+    def mover_arriba(self) -> Estado:
+        if self.pos_vehiculo[1] <= 0:
+            return None
+        
+        nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1]-1]
+
+        if mapa[nueva_posicion[0]][nueva_posicion[1]] == "X":
+            return None
+
+        return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagidos, self.energia)
+
+    def mover_abajo(self) -> Estado:
+        if self.pos_vehiculo[1] >= len(self.mapa):
+            return None
+        
+        nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1]+1]
+
+
+        if mapa[nueva_posicion[0]][nueva_posicion[1]] == "X":
+            return None
+
+        return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia)
+    
+    def mover_derecha(self) -> Estado:
+        """ Operación de moverse a la derecha """
+        if self.pos_vehiculo[0] <= len(self.mapa[0]):
+            return None
+
+        nueva_posicion = [self.pos_vehiculo[0]+1, self.pos_vehiculo[1]]
+
+
+        if mapa[nueva_posicion[0]][nueva_posicion[1]] == "X":
+            return None
+
+        return Estado(self.mapa, nueva_poscion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia)
+
+    def mover_izquierda(self) -> Estado:
+        """ Operación de moverse a la izquierda """
+        if self.pos_vehiculo[0] >= 0:
+            return None
+
+        nueva_posicion = [self.pos_vehiculo[0]-1, self.pos_vehiculo[1]]
+
+        if mapa[nueva_posicion[0]][nueva_posicion[1]] == "X":
+            return None
+
+        return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia)
 
 
 def main() -> None:
