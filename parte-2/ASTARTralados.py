@@ -38,8 +38,9 @@ class Estado:
         self.realizar_efectos()
 
     def realizar_efectos(self):
-        casilla_actual = self.mapa[self.pos_vehiculo[0]][self.pos_vehiculo[1]]
+        casilla_actual = self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]]
         if casilla_actual == "N":
+            print("hola")
             if not self.recogiendo_contagiosos:
                 self.energia -= 1
                 self.recoger_no_contagioso()
@@ -68,46 +69,26 @@ class Estado:
             if "C" in self.asientos_contagiados:
                 self.asientos_contagiados = []
 
-    def mover_arriba(self):
-        if self.pos_vehiculo[1] <= 0:
-            return None
-        
-        nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1]-1]
-
-        if self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
-            return None
-
-        return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia)
-
-    def mover_abajo(self) :
-        if self.pos_vehiculo[1] >= len(self.mapa):
-            return None
-        
-        nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1]+1]
-
-        if self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
-            return None
-
-        return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia)
-    
-    def mover_derecha(self):
-        """ Operación de moverse a la derecha """
-        if self.pos_vehiculo[0] <= len(self.mapa[0]):
-            return None
-
-        nueva_posicion = [self.pos_vehiculo[0]+1, self.pos_vehiculo[1]]
-
-        if self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
-            return None
-
-        return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia)
-
-    def mover_izquierda(self):
-        """ Operación de moverse a la izquierda """
-        if self.pos_vehiculo[0] >= 0:
-            return None
-
-        nueva_posicion = [self.pos_vehiculo[0]-1, self.pos_vehiculo[1]]
+    def mover(self, direccion):
+        """ Función que mueve el vehículo en cualquiera de las cuatro direcciones (arriba, abajo, derecha, izquierda)
+            generando así un nuevo estado """
+        nueva_posicion = []
+        if direccion == "arriba":
+            nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1]-1]
+            if self.pos_vehiculo[1] <= 0:
+                return None
+        elif direccion == "abajo":
+            nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1]+1]
+            if self.pos_vehiculo[1] >= len(self.mapa):
+                return None
+        elif direccion == "derecha":
+            nueva_posicion = [self.pos_vehiculo[0]+1, self.pos_vehiculo[1]]
+            if self.pos_vehiculo[0] >= len(self.mapa):
+                return None
+        elif direccion == "izquierda":
+            nueva_posicion = [self.pos_vehiculo[0]-1, self.pos_vehiculo[1]]
+            if self.pos_vehiculo[0] <= 0:
+                return None
 
         if self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
             return None
@@ -119,7 +100,7 @@ class Estado:
                 and len(self.asientos_no_contagiados) >= ASIENTOS_NO_CONTAGIOSOS):
             # Si la ambulancia está llena de pacientes no hacemos nada
             return
-        elif self.asientos_no_contagiados < ASIENTOS_NO_CONTAGIOSOS:
+        elif len(self.asientos_no_contagiados) < ASIENTOS_NO_CONTAGIOSOS:
             # Si la ambulancia tiene la sección de no contagiados sin llenar
             # añadimos al no contagiado y lo quitamos del mapa
             self.asientos_no_contagiados.append("N")
@@ -137,8 +118,9 @@ class Estado:
         for file in self.mapa:
             string += f"{file}\n"
         string += (f"pos_vehiculo: ({self.pos_vehiculo[0]}, {self.pos_vehiculo[1]})\n"
+                   f"casilla actual: {self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]]}\n"
                    f"asientos contagiosos: {self.asientos_contagiados}\n"
-                   f"asientos_no_contagiados: {self.asientos_no_contagiados}\n"
+                   f"asientos no contagiados: {self.asientos_no_contagiados}\n"
                    f"energía: {self.energia}\n"
                    f"recogiendo contagiosos: {self.recogiendo_contagiosos}")
         return string
@@ -151,8 +133,8 @@ def generar_estado_inicial(mapa: [[str,],]) -> Estado:
             if casilla == "P":
                 indice_parking = [j, i]
                 break
-
-    return Estado(mapa, indice_parking, [], [], 50, False)
+    # La energía es 51 porque en la primera iteración se le va a quitar 1
+    return Estado(mapa, indice_parking, [], [], 51, False)
 
 
 def main() -> None:
@@ -162,10 +144,7 @@ def main() -> None:
     mapa = generar_matriz(path)
     estado_inicial = generar_estado_inicial(mapa)
     print(estado_inicial)
-    print(estado_inicial.mover_izquierda())
-    print(estado_inicial.mover_derecha())
-    print(estado_inicial.mover_abajo())
-    print(estado_inicial.mover_arriba())
+    print(estado_inicial.mover("izquierda").mover("izquierda").mover("izquierda").mover("arriba"))
 
 
 if __name__ == "__main__":
