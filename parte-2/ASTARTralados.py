@@ -7,12 +7,12 @@ ASIENTOS_NO_CONTAGIOSOS = 2
 
 def leer_argumentos() -> (str, str):
     """ Función que lee los argumentos del programa """
-    # Argumento 1 : path al archivo csv
-    # Argumento 2 : identificador de la función heurística
+    # Argumento 1: path al archivo csv
+    # Argumento 2: identificador de la función heurística
     return sys.argv[1], sys.argv[2]
 
 
-def generar_matriz(path_mapa) -> [[str]] :
+def generar_matriz(path_mapa) -> [[str,],]:
     """ Función que lee el archivo de entrada y lo convierte en una matriz """
     with open(path_mapa, "r") as file:
         file_data = file.readlines()
@@ -21,26 +21,30 @@ def generar_matriz(path_mapa) -> [[str]] :
         mtrx.append([])
         for chars in file_data[i].split(";"):
             mtrx[i].append(chars)
-        mtrx[i][-1] = mtrx[i][-1][:-1]
+        if i != len(file_data)-1:
+            mtrx[i][-1] = mtrx[i][-1][:-1]
     return mtrx
 
 
 class Estado:
-    def __init__(self, mapa: [[str,],], pos_vehiculo: [str,], asientos_contagiados: [str,]
-                 , asientos_no_contagiados: [str,], energia: int, recogiendo_contagiosos: bool = False) -> None:
+    def __init__(self, mapa: [[str,],], pos_vehiculo: [str,], asientos_contagiados: [str,],
+                 asientos_no_contagiados: [str,], energia: int, recogiendo_contagiosos: bool = False) -> None:
         self.mapa = mapa
         self.pos_vehiculo = pos_vehiculo
         self.asientos_contagiados = asientos_contagiados
         self.asientos_no_contagiados = asientos_no_contagiados
         self.energia = energia
         self.recogiendo_contagiosos = recogiendo_contagiosos
+        self.realizar_efectos()
 
     def realizar_efectos(self):
         casilla_actual = self.mapa[self.pos_vehiculo[0]][self.pos_vehiculo[1]]
         if casilla_actual == "N":
             if not self.recogiendo_contagiosos:
+                self.energia -= 1
                 self.recoger_no_contagioso()
         elif casilla_actual == "C":
+            self.energia -= 1
             self.recoger_contagioso()
         elif casilla_actual == "1":
             # Quitamos la energía al coste de la casilla
@@ -52,6 +56,7 @@ class Estado:
             # Cuando volvemos al parking se recupera la energía de la ambulancia
             self.energia = 50
         elif casilla_actual == "CN":
+            self.energia -= 1
             if "C" in self.asientos_contagiados:
                 # Si hay paciente contagioso no hacemos nada
                 return
@@ -59,6 +64,7 @@ class Estado:
             self.asientos_no_contagiados = []
             self.asientos_contagiados = []
         elif casilla_actual == "NN":
+            self.energia -= 1
             if "C" in self.asientos_contagiados:
                 self.asientos_contagiados = []
 
@@ -68,18 +74,18 @@ class Estado:
         
         nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1]-1]
 
-        if self.mapa[nueva_posicion[0]][nueva_posicion[1]] == "X":
+        if self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
             return None
 
         return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia)
 
-    def mover_abajo(self):
+    def mover_abajo(self) :
         if self.pos_vehiculo[1] >= len(self.mapa):
             return None
         
         nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1]+1]
 
-        if self.mapa[nueva_posicion[0]][nueva_posicion[1]] == "X":
+        if self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
             return None
 
         return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia)
@@ -91,7 +97,7 @@ class Estado:
 
         nueva_posicion = [self.pos_vehiculo[0]+1, self.pos_vehiculo[1]]
 
-        if self.mapa[nueva_posicion[0]][nueva_posicion[1]] == "X":
+        if self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
             return None
 
         return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia)
@@ -103,7 +109,7 @@ class Estado:
 
         nueva_posicion = [self.pos_vehiculo[0]-1, self.pos_vehiculo[1]]
 
-        if self.mapa[nueva_posicion[0]][nueva_posicion[1]] == "X":
+        if self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
             return None
 
         return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia)
@@ -111,33 +117,56 @@ class Estado:
     def recoger_no_contagioso(self):
         if (len(self.asientos_contagiados) >= ASIENTOS_CONTAGIOSOS
                 and len(self.asientos_no_contagiados) >= ASIENTOS_NO_CONTAGIOSOS):
-            # Si la ambulancia esta llena de pacientes no hacemos nada
+            # Si la ambulancia está llena de pacientes no hacemos nada
             return
         elif self.asientos_no_contagiados < ASIENTOS_NO_CONTAGIOSOS:
             # Si la ambulancia tiene la sección de no contagiados sin llenar
             # añadimos al no contagiado y lo quitamos del mapa
             self.asientos_no_contagiados.append("N")
-            self.mapa[self.pos_vehiculo[0]][self.pos_vehiculo[1]] = "1"
-        elif len(self.asientos_contagiados) > 0 and not "C" in self.asientos_contagiados:
-            # Si la sección de no contagiados esta llena y la de contagiados no tiene pacientes contagiados
+            self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]] = "1"
+        elif len(self.asientos_contagiados) > 0 and not ("C" in self.asientos_contagiados):
+            # Si la sección de no contagiados está llena y la de contagiados no tiene pacientes contagiados
             self.asientos_contagiados.append("N")
-            self.mapa[self.pos_vehiculo[0]][self.pos_vehiculo[1]] = "1"
+            self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]] = "1"
 
     def recoger_contagioso(self):
         ...
+
+    def __str__(self):
+        string = f"mapa:\n"
+        for file in self.mapa:
+            string += f"{file}\n"
+        string += (f"pos_vehiculo: ({self.pos_vehiculo[0]}, {self.pos_vehiculo[1]})\n"
+                   f"asientos contagiosos: {self.asientos_contagiados}\n"
+                   f"asientos_no_contagiados: {self.asientos_no_contagiados}\n"
+                   f"energía: {self.energia}\n"
+                   f"recogiendo contagiosos: {self.recogiendo_contagiosos}")
+        return string
+
+
+def generar_estado_inicial(mapa: [[str,],]) -> Estado:
+    indice_parking = []
+    for i, fila in enumerate(mapa):
+        for j, casilla in enumerate(fila):
+            if casilla == "P":
+                indice_parking = [j, i]
+                break
+
+    return Estado(mapa, indice_parking, [], [], 50, False)
 
 
 def main() -> None:
     # Leemos los argumentos del programa
     path, num_h = leer_argumentos()
     print(path, num_h)
-    matrix = generar_matriz(path)
-    print(matrix)
+    mapa = generar_matriz(path)
+    estado_inicial = generar_estado_inicial(mapa)
+    print(estado_inicial)
+    print(estado_inicial.mover_izquierda())
+    print(estado_inicial.mover_derecha())
+    print(estado_inicial.mover_abajo())
+    print(estado_inicial.mover_arriba())
 
 
 if __name__ == "__main__":
     main()
-    
-
-
-
