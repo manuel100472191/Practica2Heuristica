@@ -228,12 +228,11 @@ def a_star(estado_inicial: Estado):
     while len(abierta) > 0 and exito is False:
         # Obtenemos el estado con el coste minimo de la función f(x) ademas de su indice
         indice_estado, estado_actual = min(enumerate(abierta), key=lambda estado: estado[1].fx)
-        print(estado_actual.fx, len(abierta) + len(cerrada))
+        # print(estado_actual.fx, len(abierta) + len(cerrada))
         cerrada.append(abierta.pop(indice_estado))
         # Si el estado actual es un estado final se termina la búsqueda
         if comprobar_estado_final(estado_actual):
-            exito = True
-            continue
+            return estado_actual
         # Se generan los nuevos estados a partir del actual
         for operador in ("arriba", "abajo", "derecha", "izquierda"):
             nuevo_estado = estado_actual.mover(operador)
@@ -247,8 +246,19 @@ def a_star(estado_inicial: Estado):
                     abierta.append(nuevo_estado)
             else:
                 abierta.append(nuevo_estado)
+    return None
 
-    print(estado_actual)
+
+def back_tracking(estado_final: Estado):
+    estado_actual = estado_final
+    camino = []
+    while estado_actual.padre is not None:
+        camino.append((f"({estado_actual.pos_vehiculo[0]},{estado_actual.pos_vehiculo[1]}):"
+                       f"{estado_actual.mapa[estado_actual.pos_vehiculo[1]][estado_actual.pos_vehiculo[0]]}:"
+                       f"{estado_actual.energia}"))
+        estado_actual = estado_actual.padre
+    for estado in camino[::-1]:
+        print(estado)
 
 
 def main() -> None:
@@ -257,7 +267,8 @@ def main() -> None:
     mapa = generar_matriz(path)
 
     estado_inicial = generar_estado_inicial(mapa, int(num_h))
-    a_star(estado_inicial)
+    estado_final = a_star(estado_inicial)
+    back_tracking(estado_final)
 
 
 if __name__ == "__main__":
