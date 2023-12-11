@@ -1,4 +1,5 @@
 import sys
+import math
 
 # Constantes
 ASIENTOS_CONTAGIOSOS = 8
@@ -28,15 +29,14 @@ def generar_matriz(path_mapa) -> [[str, ], ]:
 
 class Estado:
     def __init__(self, mapa: [[str, ], ], pos_vehiculo: [str, ], asientos_contagiados: [str, ],
-                 asientos_no_contagiados: [str, ], energia: int, padre, num_h: int,
-                 recogiendo_contagiosos: bool = False) -> None:
+                 asientos_no_contagiados: [str, ], energia: int, padre, num_h: int) -> None:
         self.mapa = mapa
         self.pos_vehiculo = pos_vehiculo
         self.asientos_contagiados = asientos_contagiados
         self.asientos_no_contagiados = asientos_no_contagiados
         self.energia = energia
-        self.recogiendo_contagiosos = recogiendo_contagiosos
         self.padre = padre
+        self.num_h = num_h
         # Usamos el valor del coste de la acción actual para el calculo de la función f(x)
         g_actual = self.realizar_efectos()
         self.gx = g_actual
@@ -44,14 +44,14 @@ class Estado:
             self.gx = 0
         else:
             self.gx = self.padre.gx + g_actual
-        self.hx = self.calcular_hx(num_h)
+        self.hx = self.calcular_hx()
         self.fx = self.gx + self.hx
 
     def realizar_efectos(self) -> int:
         casilla_actual = self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]]
         if casilla_actual == "N":
             self.energia -= 1
-            if not self.recogiendo_contagiosos:
+            if not ("C" in self.asientos_contagiados):
                 self.recoger_no_contagioso()
             return 1
         if casilla_actual == "C":
@@ -66,7 +66,7 @@ class Estado:
             self.energia -= 1
             self.dejar_no_contagiosos()
             return 1
-        if casilla_actual == "NN":
+        if casilla_actual == "CC":
             self.energia -= 1
             self.dejar_contagiosos()
             return 1
@@ -80,30 +80,27 @@ class Estado:
         nueva_posicion = []
         if direccion == "arriba":
             nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1] - 1]
-            if self.pos_vehiculo[1] <= 0:
+            if self.pos_vehiculo[1] <= 0 or self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
                 return None
         elif direccion == "abajo":
             nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1] + 1]
-            if self.pos_vehiculo[1] >= len(self.mapa):
+            if nueva_posicion[1] >= len(self.mapa) or self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
                 return None
         elif direccion == "derecha":
             nueva_posicion = [self.pos_vehiculo[0] + 1, self.pos_vehiculo[1]]
-            if self.pos_vehiculo[0] >= len(self.mapa):
+            if nueva_posicion[0] >= len(self.mapa[0]) or self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
                 return None
         elif direccion == "izquierda":
             nueva_posicion = [self.pos_vehiculo[0] - 1, self.pos_vehiculo[1]]
-            if self.pos_vehiculo[0] <= 0:
+            if nueva_posicion[0] <= 0 or self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
                 return None
 
-        if self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
-            return None
-
         return Estado(self.mapa, nueva_posicion, self.asientos_contagiados, self.asientos_no_contagiados, self.energia,
-                      self, )
+                      self, self.num_h)
 
     def recoger_no_contagioso(self):
         if (len(self.asientos_contagiados) >= ASIENTOS_CONTAGIOSOS
-            and len(self.asientos_no_contagiados) >= ASIENTOS_NO_CONTAGIOSOS) or self.recogiendo_contagiosos:
+            and len(self.asientos_no_contagiados) >= ASIENTOS_NO_CONTAGIOSOS) or "C" in self.asientos_contagiados:
             # Si la ambulancia está llena de pacientes no hacemos nada
             return
         elif len(self.asientos_no_contagiados) < ASIENTOS_NO_CONTAGIOSOS:
@@ -123,7 +120,6 @@ class Estado:
         # paciente al vehículo y ponemos que se están recogiendo contagiosos para que no se admitan más no contagiosos
         self.asientos_contagiados.append("N")
         self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]] = "1"
-        self.recogiendo_contagiosos = True
 
     def dejar_no_contagiosos(self):
         """ Función que deja los pacientes no contagiosos en el centro """
@@ -138,14 +134,22 @@ class Estado:
         """ Función que deja a los pacientes contagiosos en el centro"""
         if "C" in self.asientos_contagiados:
             self.asientos_contagiados = []
-            self.recogiendo_contagiosos = False
 
-    def calcular_hx(self, num_h) -> int:
-        if num_h == 1:
+    def calcular_hx(self) -> int:
+        if self.num_h == 1:
             # La heurística uno consiste en añadir el número de pacientes que quedan en el mapa multiplicado por 2 +
             # el número de pacientes que hay en el vehículo sin multiplicar
-            return (contar_numero_pacientes(self.mapa) * 2 + len(self.asientos_contagiados) +
-                    len(self.asientos_no_contagiados))
+            n_pacientes, pos_pacientes, pos_parking = contar_numero_pacientes(self.mapa)
+            penalizacion = 10 ** 10
+            if self.energia - calcular_distancia(self.pos_vehiculo, pos_parking) > 0:
+                penalizacion = 0
+            if len(pos_pacientes) == 0:
+                return penalizacion + 5 * len(self.asientos_contagiados) + 5 * len(self.asientos_no_contagiados)
+            paciente_mas_cercano = min(pos_pacientes, key=lambda pos: calcular_distancia(self.pos_vehiculo, pos))
+            dis_paciente_cercano = calcular_distancia(self.pos_vehiculo, paciente_mas_cercano)
+
+            return (100 * dis_paciente_cercano + 10 * n_pacientes + 5 * len(self.asientos_no_contagiados)
+                    + 5 * len(self.asientos_contagiados) + penalizacion)
 
     def __str__(self):
         string = f"mapa:\n"
@@ -155,14 +159,12 @@ class Estado:
                    f"casilla actual: {self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]]}\n"
                    f"asientos contagiosos: {self.asientos_contagiados}\n"
                    f"asientos no contagiados: {self.asientos_no_contagiados}\n"
-                   f"energía: {self.energia}\n"
-                   f"recogiendo contagiosos: {self.recogiendo_contagiosos}")
+                   f"energía: {self.energia}\n")
         return string
 
     def __eq__(self, other):
         """ Devuelve si dos estados con iguales. Lo son en caso de que todos sus atributos lo sean """
         return (self.mapa == other.mapa and self.pos_vehiculo == other.pos_vehiculo and
-                self.recogiendo_contagiosos == other.recogiendo_contagiosos and self.energia == other.energia and
                 self.asientos_contagiados == other.asientos_contagiados and
                 self.asientos_no_contagiados == other.asientos_no_contagiados)
 
@@ -176,22 +178,34 @@ def generar_estado_inicial(mapa: [[str, ], ], num_h: int) -> Estado:
                 indice_parking = [j, i]
                 break
     # La energía es 51 porque en la primera iteración se le va a quitar 1
-    return Estado(mapa, indice_parking, [], [], 51, None, num_h, False)
+    return Estado(mapa, indice_parking, [], [], 51, None, num_h)
 
 
-def contar_numero_pacientes(mapa: [[str, ], ]) -> int:
+def contar_numero_pacientes(mapa: [[str, ], ]) -> (int, [(int,), ], [int, ]):
     """ Cuenta el número de pacientes que quedan en el mapa"""
     contador = 0
-    for fila in mapa:
-        for casilla in fila:
+    posiciones_pacientes = []
+    posicion_parking = []
+    for i, fila in enumerate(mapa):
+        for j, casilla in enumerate(fila):
             if casilla == "C" or casilla == "N":
                 contador += 1
-    return contador
+                posiciones_pacientes.append([i, j])
+            elif casilla == "P":
+                posicion_parking = [i, j]
+    return contador, posiciones_pacientes, posicion_parking
+
+
+def calcular_distancia(posicion_1: (int,), posicion_2: (int,)):
+    if posicion_2 is not None:
+        return math.sqrt((posicion_1[0] - posicion_2[0]) ** 2 + (posicion_1[1] - posicion_2[1]) ** 2)
+    else:
+        return str("inf")
 
 
 def comprobar_estado_final(estado: Estado) -> bool:
     """ Comprueba que el estado actual sea un estado final """
-    if contar_numero_pacientes(estado.mapa) != 0:
+    if contar_numero_pacientes(estado.mapa)[0] != 0:
         return False
     if len(estado.asientos_contagiados) != 0:
         return False
@@ -211,9 +225,10 @@ def a_star(estado_inicial: Estado):
     cerrada = []
     exito = False
     estado_actual = None
-    while len(abierta) != 0 or exito is False:
+    while len(abierta) > 0 and exito is False:
         # Obtenemos el estado con el coste minimo de la función f(x) ademas de su indice
         indice_estado, estado_actual = min(enumerate(abierta), key=lambda estado: estado[1].fx)
+        print(estado_actual.fx, len(abierta) + len(cerrada))
         cerrada.append(abierta.pop(indice_estado))
         # Si el estado actual es un estado final se termina la búsqueda
         if comprobar_estado_final(estado_actual):
@@ -240,7 +255,8 @@ def main() -> None:
     # Leemos los argumentos del programa
     path, num_h = leer_argumentos()
     mapa = generar_matriz(path)
-    estado_inicial = generar_estado_inicial(mapa, num_h)
+
+    estado_inicial = generar_estado_inicial(mapa, int(num_h))
     a_star(estado_inicial)
 
 
