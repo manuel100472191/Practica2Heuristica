@@ -1,6 +1,7 @@
 import sys
 import math
 import copy
+import time
 
 # Constantes
 ASIENTOS_CONTAGIOSOS = 8
@@ -138,12 +139,13 @@ class Estado:
 
     def calcular_hx(self) -> int:
         if self.num_h == 2:
-            # h(x) = n_pacientes_mapa * 10 + n_pacientes_vehiculo * 5 +
-            # (distancia_proximo_paciente * 3 o distancia_CN o CC) + 10^10 si no hay energía
-            n_pacientes, pos_pacientes, pos_parking, pos_cn, pos_cc = datos_del_mapa(self.mapa)
+            # h(x) = (distancia_objetivo + n_pacientes) * 10 + penalizacion
+            # distancia_objetivo: ambulancia vacía -> paciente más cercano
 
+            pos_pacientes_n, pos_pacientes_c, pos_parking, pos_cn, pos_cc = datos_del_mapa(self.mapa)
             penalizacion = 10 ** 10 if self.energia - calcular_distancia(self.pos_vehiculo, pos_parking) < 0 else 0
-            if n_pacientes == 0 and len(self.asientos_contagiosos) == 0 and len(self.asientos_no_contagiosos) == 0:
+            if ((len(pos_pacientes_n) + len(pos_pacientes_c)) == 0 and len(self.asientos_contagiosos) == 0
+                    and len(self.asientos_no_contagiosos) == 0):
                 distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_parking)
                 return distancia_objetivo
             # Calculamos la distancia al proximo objetivo más cercano
@@ -151,33 +153,48 @@ class Estado:
                 distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cc)
             elif "N" in self.asientos_no_contagiosos or "N" in self.asientos_contagiosos:
                 distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cn)
-            elif n_pacientes > 0:
-                paciente_cercano = min(pos_pacientes, key=lambda pos: calcular_distancia(self.pos_vehiculo, pos))
+            elif (len(pos_pacientes_n) + len(pos_pacientes_c)) > 0:
+                paciente_cercano = min(pos_pacientes_n + pos_pacientes_c, key=lambda pos: calcular_distancia(self.pos_vehiculo, pos))
                 distancia_objetivo = calcular_distancia(self.pos_vehiculo, paciente_cercano)
             else:
                 distancia_objetivo = 0
 
-            return 5*(n_pacientes+(len(self.asientos_contagiosos) + len(self.asientos_no_contagiosos))
-                      + distancia_objetivo + penalizacion + (50-self.energia)*0.2)
-        elif self.num_h == 1:
-
-            n_pacientes, pos_pacientes, pos_parking, pos_cn, pos_cc = datos_del_mapa(self.mapa)
-            penalizacion = 10 ** 10 if self.energia - calcular_distancia(self.pos_vehiculo, pos_parking) < 0 else 0
-            if n_pacientes == 0 and len(self.asientos_contagiosos) == 0 and len(self.asientos_no_contagiosos) == 0:
+            return (distancia_objetivo + (len(pos_pacientes_n) + len(pos_pacientes_c)))*10 + penalizacion
+        if self.num_h == 1:
+            pos_pacientes_n, pos_pacientes_c, pos_parking, pos_cn, pos_cc = datos_del_mapa(self.mapa)
+            # Cuando no quedan pacientes por entregar los llevamos al parking directamente
+            if ((len(pos_pacientes_n) +
+                 len(pos_pacientes_c) +
+                 len(self.asientos_contagiosos) +
+                 len(self.asientos_no_contagiosos)) == 0):
                 distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_parking)
-                return distancia_objetivo
-            # Calculamos la distancia al proximo objetivo más cercano
-            elif "C" in self.asientos_contagiosos:
+            # Dejar pacientes contagiosos si no quedan pacientes contagiosos en el mapa o si están llenos
+            # los asientos de contagiosos
+            elif ((len(pos_pacientes_c) == 0 or len(self.asientos_contagiosos) == ASIENTOS_CONTAGIOSOS)
+                  and "C" in self.asientos_contagiosos):
                 distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cc)
-            elif "N" in self.asientos_no_contagiosos or "N" in self.asientos_contagiosos:
+            # Dejar pacientes no contagiosos
+            elif ((len(pos_pacientes_n) == 0 or len(self.asientos_no_contagiosos) == ASIENTOS_NO_CONTAGIOSOS)
+                  and not ("C" in self.asientos_no_contagiosos)):
                 distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cn)
-            elif n_pacientes > 0:
-                paciente_cercano = min(pos_pacientes, key=lambda pos: calcular_distancia(self.pos_vehiculo, pos))
-                distancia_objetivo = calcular_distancia(self.pos_vehiculo, paciente_cercano)
+            # Recoger al paciente no contagioso más cercano
+            elif not ("C" in self.asientos_contagiosos):
+                pos_cercano = min(pos_pacientes_n, key=lambda pos: calcular_distancia(self.pos_vehiculo, pos))
+                distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cercano)
+            # Recoger al paciente contagioso más cercano
             else:
-                distancia_objetivo = 0
+                pos_cercano = min(pos_pacientes_c, key=lambda pos: calcular_distancia(self.pos_vehiculo, pos))
+                distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cercano)
 
-            return (distancia_objetivo + n_pacientes)*10 + penalizacion
+            if distancia_objetivo > self.energia:
+                dis_parking = calcular_distancia(self.pos_vehiculo, pos_parking)
+                if dis_parking > self.energia:
+                    distancia_objetivo = float('inf')
+                else:
+                    distancia_objetivo = dis_parking
+
+            return distancia_objetivo + ((len(pos_pacientes_c) + len(pos_pacientes_n))*5
+                                         + (len(self.asientos_contagiosos) + len(self.asientos_no_contagiosos))) * 100
 
     def __str__(self):
         string = f"mapa:\n"
@@ -212,23 +229,24 @@ def generar_estado_inicial(mapa: [[str, ], ], num_h: int) -> Estado:
 
 def datos_del_mapa(mapa: [[str, ], ]) -> (int, [(int,), ], [int, ], [int,], [int,]):
     """ Cuenta el número de pacientes que quedan en el mapa"""
-    n_pacientes = 0
-    posiciones_pacientes = []
+    posiciones_pacientes_n = []
+    posiciones_pacientes_c = []
     posicion_parking = []
-    posicion_CN = []
-    posicion_CC = []
+    posicion_cn = []
+    posicion_cc = []
     for i, fila in enumerate(mapa):
         for j, casilla in enumerate(fila):
-            if casilla == "C" or casilla == "N":
-                n_pacientes += 1
-                posiciones_pacientes.append([i, j])
+            if casilla == "N":
+                posiciones_pacientes_n.append([i, j])
+            elif casilla == "C":
+                posiciones_pacientes_c.append([i, j])
             elif casilla == "P":
                 posicion_parking = [i, j]
             elif casilla == "CC":
-                posicion_CC = [i, j]
+                posicion_cc = [i, j]
             elif casilla == "CN":
-                posicion_CN = [i, j]
-    return n_pacientes, posiciones_pacientes, posicion_parking, posicion_CN, posicion_CC
+                posicion_cn = [i, j]
+    return posiciones_pacientes_n, posiciones_pacientes_c, posicion_parking, posicion_cn, posicion_cc
 
 
 def calcular_distancia(posicion_1: (int,), posicion_2: (int,)):
@@ -240,7 +258,8 @@ def calcular_distancia(posicion_1: (int,), posicion_2: (int,)):
 
 def comprobar_estado_final(estado: Estado) -> bool:
     """ Comprueba que el estado actual sea un estado final """
-    if datos_del_mapa(estado.mapa)[0] != 0:
+    datos = datos_del_mapa(estado.mapa)
+    if (len(datos[0]) + len(datos[1])) != 0:
         return False
     if len(estado.asientos_contagiosos) != 0:
         return False
@@ -265,10 +284,9 @@ def a_star(estado_inicial: Estado):
         # Obtenemos el estado con el coste minimo de la función f(x) ademas de su indice
         indice_estado, estado_actual = min(enumerate(abierta), key=lambda estado: estado[1].fx)
         cerrada.append(abierta.pop(indice_estado))
-        print(estado_actual.fx)
         # Si el estado actual es un estado final se termina la búsqueda
         if comprobar_estado_final(estado_actual):
-            return estado_actual
+            return estado_actual, len(abierta)+len(cerrada)
         # Se generan los nuevos estados a partir del actual
         for operador in ("arriba", "abajo", "derecha", "izquierda"):
             nuevo_estado = estado_actual.mover(operador)
@@ -282,18 +300,25 @@ def a_star(estado_inicial: Estado):
                     abierta.append(nuevo_estado)
             else:
                 abierta.append(nuevo_estado)
-    return None
+    return None, len(abierta)+len(cerrada)
 
 
-def back_tracking(estado_final: Estado, mapa: [[str,],]):
+def back_tracking(estado_final: Estado):
     estado_actual = estado_final
     camino = []
+    coste_energetico = estado_final.gx
     while estado_actual is not None:
         camino.append(estado_actual)
-        print(estado_actual)
         estado_actual = estado_actual.padre
 
-    for estado in camino[::-1]:
+    longitud_plan = len(camino)
+    camino = camino[::-1]
+
+    return camino, coste_energetico, longitud_plan
+
+
+def generar_output(camino: [Estado, ], mapa: [[str,],], tiempo, coste, longitud, nodos_expandidos):
+    for estado in camino:
         print((f"({estado.pos_vehiculo[0]},{estado.pos_vehiculo[1]}):"
                        f"{mapa[estado.pos_vehiculo[1]][estado.pos_vehiculo[0]]}:"
                        f"{estado.energia}"))
@@ -301,14 +326,24 @@ def back_tracking(estado_final: Estado, mapa: [[str,],]):
         if casilla_actual in ('N', 'C'):
             mapa[estado.pos_vehiculo[1]][estado.pos_vehiculo[0]] = '1'
 
+    print(f"Tiempo total: {tiempo: .2f}\n"
+          f"Coste total: {coste}\n"
+          f"Longitud del plan: {longitud}\n"
+          f"Nodos expandidos: {nodos_expandidos}")
+
 
 def main() -> None:
     # Leemos los argumentos del programa
     path, num_h = leer_argumentos()
     mapa = generar_matriz(path)
     estado_inicial = generar_estado_inicial(mapa, int(num_h))
-    estado_final = a_star(estado_inicial)
-    back_tracking(estado_final, mapa)
+    comienzo = time.time()
+    estado_final, nodos_expandidos = a_star(estado_inicial)
+    final = time.time()
+    tiempo = final - comienzo
+    camino, coste_total, longitud_plan = back_tracking(estado_final)
+    generar_output(camino, mapa, tiempo, coste_total, longitud_plan, nodos_expandidos)
+
 
 
 if __name__ == "__main__":
