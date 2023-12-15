@@ -1,3 +1,10 @@
-pwd
-ls
-python3 /Users/manueldelamo/OnMyMac/PycharmProjects/Practica2Heuristica/parte-2/ASTARTTraslados.py /Users/manueldelamo/OnMyMac/PycharmProjects/Practica2Heuristica/parte-2/ASTAR-tests/mapa.csv 1
+python3 ASTARTralados.py ./ASTAR-tests/mapa1.csv 1
+python3 ASTARTralados.py ./ASTAR-tests/mapa2.csv 1
+python3 ASTARTralados.py ./ASTAR-tests/mapa3.csv 1
+python3 ASTARTralados.py ./ASTAR-tests/mapa4.csv 1
+python3 ASTARTralados.py ./ASTAR-tests/mapa5.csv 1
+python3 ASTARTralados.py ./ASTAR-tests/mapa1.csv 2
+python3 ASTARTralados.py ./ASTAR-tests/mapa2.csv 2
+python3 ASTARTralados.py ./ASTAR-tests/mapa3.csv 2
+python3 ASTARTralados.py ./ASTAR-tests/mapa4.csv 2
+python3 ASTARTralados.py ./ASTAR-tests/mapa5.csv 2

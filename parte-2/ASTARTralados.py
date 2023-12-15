@@ -148,7 +148,7 @@ class Estado:
         if "C" in self.asientos_contagiosos:
             self.asientos_contagiosos = []
 
-    def calcular_hx(self) -> int:
+    def calcular_hx(self) -> float:
         if self.num_h == 1:
             pos_pacientes_n, pos_pacientes_c, pos_parking, pos_cn, pos_cc = datos_del_mapa(self.mapa)
             # Cuando no quedan pacientes por entregar los llevamos al parking directamente
@@ -182,8 +182,8 @@ class Estado:
                 else:
                     distancia_objetivo = dis_parking
 
-            return distancia_objetivo + ((len(pos_pacientes_c) + len(pos_pacientes_n)) * 5
-                                         + (len(self.asientos_contagiosos) + len(self.asientos_no_contagiosos))) * 10
+            return distancia_objetivo*0.2 + ((len(pos_pacientes_c) + len(pos_pacientes_n))*0.5
+                                             + (len(self.asientos_contagiosos) + len(self.asientos_no_contagiosos))*0.3)*len(self.mapa[0])
         if self.num_h == 2:
             pos_pacientes_n, pos_pacientes_c, pos_parking, pos_cn, pos_cc = datos_del_mapa(self.mapa)
             # Cuando no quedan pacientes por entregar los llevamos al parking directamente
@@ -197,6 +197,10 @@ class Estado:
             elif ((len(pos_pacientes_c) == 0 or len(self.asientos_contagiosos) == ASIENTOS_CONTAGIOSOS)
                   and "C" in self.asientos_contagiosos):
                 distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cc)
+                if len(pos_pacientes_c) != 0:
+                    pos_cercano = min(pos_pacientes_c, key=lambda pos: calcular_distancia(self.pos_vehiculo, pos))
+                    if distancia_objetivo > calcular_distancia(self.pos_vehiculo, pos_cercano):
+                        distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cercano)
             # Dejar pacientes no contagiosos
             elif ((len(pos_pacientes_n) == 0 or len(self.asientos_no_contagiosos) == ASIENTOS_NO_CONTAGIOSOS)
                   and not ("C" in self.asientos_contagiosos)):
@@ -205,10 +209,14 @@ class Estado:
             elif not ("C" in self.asientos_contagiosos):
                 pos_cercano = min(pos_pacientes_n, key=lambda pos: calcular_distancia(self.pos_vehiculo, pos))
                 distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cercano)
+                if distancia_objetivo < calcular_distancia(self.pos_vehiculo, pos_cn):
+                    distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cn)
             # Recoger al paciente contagioso más cercano
             else:
                 pos_cercano = min(pos_pacientes_c, key=lambda pos: calcular_distancia(self.pos_vehiculo, pos))
                 distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cercano)
+                if distancia_objetivo < calcular_distancia(self.pos_vehiculo, pos_cc):
+                    distancia_objetivo = calcular_distancia(self.pos_vehiculo, pos_cc)
 
             if distancia_objetivo > self.energia:
                 dis_parking = calcular_distancia(self.pos_vehiculo, pos_parking)
@@ -217,8 +225,8 @@ class Estado:
                 else:
                     distancia_objetivo = dis_parking
 
-            return (distancia_objetivo + len(pos_pacientes_c) + len(pos_pacientes_n) + len(self.asientos_contagiosos)
-                    + len(self.asientos_no_contagiosos))
+            return distancia_objetivo + ((len(pos_pacientes_c) + len(pos_pacientes_n)) * 2
+                                         + (len(self.asientos_contagiosos) + len(self.asientos_no_contagiosos)))*10
 
     def __str__(self):
         """ Método que ayuda a la hora de imprimir en pantalla un estado. Sirve para el debugging """
@@ -228,16 +236,17 @@ class Estado:
         string += (f"pos_vehiculo: ({self.pos_vehiculo[0]}, {self.pos_vehiculo[1]})\n"
                    f"casilla actual: {self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]]}\n"
                    f"asientos contagiosos: {self.asientos_contagiosos}\n"
-                   f"asientos no contagiados: {self.asientos_no_contagiosos}\n"
+                   f"asientos no contagiosos: {self.asientos_no_contagiosos}\n"
                    f"energía: {self.energia}\n")
         return string
 
     def __eq__(self, other):
         """ Método que devuelve si dos estados con iguales. Lo son en caso de que todos sus atributos lo sean """
-        return (self.mapa == other.mapa and self.pos_vehiculo == other.pos_vehiculo and
+        return (self.mapa == other.mapa and
+                self.pos_vehiculo == other.pos_vehiculo and
                 self.asientos_contagiosos == other.asientos_contagiosos and
-                self.energia == other.energia and
-                self.asientos_no_contagiosos == other.asientos_no_contagiosos)
+                self.asientos_no_contagiosos == other.asientos_no_contagiosos and
+                self.energia == other.energia)
 
 
 def generar_estado_inicial(mapa: [[str, ], ], num_h: int) -> Estado:
@@ -307,6 +316,13 @@ def estado_valido(estado: Estado):
     return True
 
 
+def estado_en_lista(estado: Estado, lista: [Estado,]):
+    for estado_lista in lista:
+        if estado == estado_lista:
+            return True
+    return False
+
+
 def a_star(estado_inicial: Estado):
     """ Función que implementa el algoritmo A* para el problema propuesto"""
     abierta = [estado_inicial]
@@ -318,6 +334,7 @@ def a_star(estado_inicial: Estado):
         nodos_expandidos += 1
         # Cambiamos dicho estado de la lista abierta a la lista cerrada
         cerrada.append(abierta.pop(indice_estado))
+        print(estado_actual.fx, estado_actual.gx)
         # Si el estado actual es un estado final se termina la búsqueda y se devuelven
         # los estados expandidos junto al estado
         if comprobar_estado_final(estado_actual):
@@ -330,11 +347,13 @@ def a_star(estado_inicial: Estado):
                 continue
             # Comprobamos que no esté el estado ya ne la lista de abierta y si lo está dejamos el de menor f(x)
             # Si no esta se añade a la lista de abierta
-            if nuevo_estado in abierta:
+            if estado_en_lista(nuevo_estado, abierta):
                 indice_viejo = abierta.index(nuevo_estado)
                 if nuevo_estado.fx < abierta[indice_viejo].fx:
                     abierta.pop(indice_viejo)
                     abierta.append(nuevo_estado)
+            elif estado_en_lista(nuevo_estado, cerrada):
+                continue
             else:
                 abierta.append(nuevo_estado)
     return None, nodos_expandidos
@@ -343,6 +362,11 @@ def a_star(estado_inicial: Estado):
 def back_tracking(estado_final: Estado):
     """ Función que se encarga del backtracking desde el nodo final"""
     # Guardamos el coste energético del último estado
+    if estado_final is None:
+        coste_energetico = float("inf")
+        camino = []
+        longitud_plan = float("inf")
+        return camino, coste_energetico, longitud_plan
     coste_energetico = estado_final.gx
     # Añadimos todos los estados del camino al objectivo a una lista
     estado_actual = estado_final
