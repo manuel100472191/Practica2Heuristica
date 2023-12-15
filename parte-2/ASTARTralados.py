@@ -20,14 +20,15 @@ def generar_matriz(path_mapa) -> [[str, ], ]:
     """ Función que lee el archivo de entrada y lo convierte en una matriz """
     with open(path_mapa, "r") as file:
         file_data = file.readlines()
-    mtrx = []
+    mapa = []
     for i in range(len(file_data)):
-        mtrx.append([])
+        mapa.append([])
         for chars in file_data[i].split(";"):
-            mtrx[i].append(chars)
+            mapa[i].append(chars)
+        # Quita el \n de el valor final
         if i != len(file_data) - 1:
-            mtrx[i][-1] = mtrx[i][-1][:-1]
-    return mtrx
+            mapa[i][-1] = mapa[i][-1][:-1]
+    return mapa
 
 
 class Estado:
@@ -50,11 +51,14 @@ class Estado:
         self.fx = self.gx + self.hx
 
     def realizar_efectos(self) -> int:
+        """
+        Método que realiza las consecuencias de la acción que le ha llevado a crearse dependiendo en la casilla
+        en la que ha caído
+        """
         casilla_actual = self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]]
         if casilla_actual == "N":
             self.energia -= 1
-            if not ("C" in self.asientos_contagiosos):
-                self.recoger_no_contagioso()
+            self.recoger_no_contagioso()
             return 1
         if casilla_actual == "C":
             self.energia -= 1
@@ -72,7 +76,7 @@ class Estado:
             self.energia -= 1
             self.dejar_contagiosos()
             return 1
-        # Si la casilla es número se los restamos a la energía
+        # Si la casilla es un número se los restamos a la energía
         self.energia -= int(casilla_actual)
         return int(casilla_actual)
 
@@ -80,6 +84,8 @@ class Estado:
         """ Función que mueve el vehículo en cualquiera de las cuatro direcciones (arriba, abajo, derecha, izquierda)
             generando así un nuevo estado """
         nueva_posicion = []
+        # Para cada dirección se comprueba que la casilla a la que vamos no sea una "X" o que se haya salido del mapa
+        # Si la nueva posicion es válida se devuelve
         if direccion == "arriba":
             nueva_posicion = [self.pos_vehiculo[0], self.pos_vehiculo[1] - 1]
             if nueva_posicion[1] < 0 or self.mapa[nueva_posicion[1]][nueva_posicion[0]] == "X":
@@ -101,10 +107,12 @@ class Estado:
                       self, self.num_h)
 
     def recoger_no_contagioso(self):
+        """ Método que sirve para comprobar si se puede reboger a un paciente no contagioso dada la casilla en
+        la que está el vehículo """
+        # Si la ambulancia está llena de pacientes no hacemos nada
         if ((len(self.asientos_contagiosos) >= ASIENTOS_CONTAGIOSOS and
              len(self.asientos_no_contagiosos) >= ASIENTOS_NO_CONTAGIOSOS)
                 or "C" in self.asientos_contagiosos):
-            # Si la ambulancia está llena de pacientes no hacemos nada
             return
         elif len(self.asientos_no_contagiosos) < ASIENTOS_NO_CONTAGIOSOS:
             # Si la ambulancia tiene la sección de no contagiados sin llenar
@@ -117,6 +125,7 @@ class Estado:
             self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]] = "1"
 
     def recoger_contagioso(self):
+        """ Método que comprueba si se puede recoger a un paciente contagioso """
         if len(self.asientos_contagiosos) >= ASIENTOS_CONTAGIOSOS or "N" in self.asientos_contagiosos:
             return
         # Si hay hueco en los asientos de contagiosos y no son no contagiosos los que están en ellos añadimos el
@@ -125,7 +134,7 @@ class Estado:
         self.mapa[self.pos_vehiculo[1]][self.pos_vehiculo[0]] = "1"
 
     def dejar_no_contagiosos(self):
-        """ Función que deja los pacientes no contagiosos en el centro """
+        """ Método que deja los pacientes no contagiosos en el centro """
         if "C" in self.asientos_contagiosos:
             # Si hay paciente contagioso no hacemos nada
             return
@@ -134,7 +143,8 @@ class Estado:
         self.asientos_contagiosos = []
 
     def dejar_contagiosos(self):
-        """ Función que deja a los pacientes contagiosos en el centro"""
+        """ Método que deja a los pacientes contagiosos en el centro"""
+        # Solo los deja en caso de que haya contagiosos en los asientos para contagiosos
         if "C" in self.asientos_contagiosos:
             self.asientos_contagiosos = []
 
@@ -211,6 +221,7 @@ class Estado:
                     + len(self.asientos_no_contagiosos))
 
     def __str__(self):
+        """ Método que ayuda a la hora de imprimir en pantalla un estado. Sirve para el debugging """
         string = f"mapa:\n"
         for file in self.mapa:
             string += f"{file}\n"
@@ -222,7 +233,7 @@ class Estado:
         return string
 
     def __eq__(self, other):
-        """ Devuelve si dos estados con iguales. Lo son en caso de que todos sus atributos lo sean """
+        """ Método que devuelve si dos estados con iguales. Lo son en caso de que todos sus atributos lo sean """
         return (self.mapa == other.mapa and self.pos_vehiculo == other.pos_vehiculo and
                 self.asientos_contagiosos == other.asientos_contagiosos and
                 self.energia == other.energia and
@@ -231,6 +242,7 @@ class Estado:
 
 def generar_estado_inicial(mapa: [[str, ], ], num_h: int) -> Estado:
     """ Genera el estado inicial comprobando donde está el parking en el mapa """
+    # Buscamos la posicion del parking porque ahi es donde se pondrá a al vehículo
     indice_parking = []
     for i, fila in enumerate(mapa):
         for j, casilla in enumerate(fila):
@@ -267,6 +279,7 @@ def datos_del_mapa(mapa: [[str, ], ]) -> (int, [(int,), ], [int, ], [int,], [int
 
 
 def calcular_distancia(posicion_1: (int,), posicion_2: (int,)):
+    """ Función que calcula la distancia en línea recta de dos puntos """
     if posicion_2 is not None:
         return math.sqrt((posicion_1[0] - posicion_2[0]) ** 2 + (posicion_1[1] - posicion_2[1]) ** 2)
     else:
@@ -288,28 +301,35 @@ def comprobar_estado_final(estado: Estado) -> bool:
 
 
 def estado_valido(estado: Estado):
+    """ Función que comprueba que un estado sea válido"""
     if estado is None or estado.energia <= 0:
         return False
     return True
 
 
 def a_star(estado_inicial: Estado):
+    """ Función que implementa el algoritmo A* para el problema propuesto"""
     abierta = [estado_inicial]
     cerrada = []
-    exito = False
-    while len(abierta) > 0 and exito is False:
-        # Obtenemos el estado con el coste minimo de la función f(x) ademas de su indice
+    nodos_expandidos = 0
+    while len(abierta) > 0:
+        # Obtenemos el estado con el coste minimo en la función f(x) ademas de su indice
         indice_estado, estado_actual = min(enumerate(abierta), key=lambda estado: estado[1].fx)
+        nodos_expandidos += 1
+        # Cambiamos dicho estado de la lista abierta a la lista cerrada
         cerrada.append(abierta.pop(indice_estado))
-        # Si el estado actual es un estado final se termina la búsqueda
+        # Si el estado actual es un estado final se termina la búsqueda y se devuelven
+        # los estados expandidos junto al estado
         if comprobar_estado_final(estado_actual):
-            return estado_actual, len(abierta)+len(cerrada)
-        # Se generan los nuevos estados a partir del actual
+            return estado_actual, nodos_expandidos
+        # Se generan los nuevos estados a partir del actual ejecutan las distintas operaciones
         for operador in ("arriba", "abajo", "derecha", "izquierda"):
             nuevo_estado = estado_actual.mover(operador)
+            # Comprobamos que el nuevo estado sea válido, en caso contrario nos saltamos lo que queda de iteración
             if not estado_valido(nuevo_estado):
                 continue
-            # Si el nuevo estado está ya en la lista de abiertos dejamos el que menor f(x) tenga
+            # Comprobamos que no esté el estado ya ne la lista de abierta y si lo está dejamos el de menor f(x)
+            # Si no esta se añade a la lista de abierta
             if nuevo_estado in abierta:
                 indice_viejo = abierta.index(nuevo_estado)
                 if nuevo_estado.fx < abierta[indice_viejo].fx:
@@ -317,32 +337,35 @@ def a_star(estado_inicial: Estado):
                     abierta.append(nuevo_estado)
             else:
                 abierta.append(nuevo_estado)
-    return None, len(abierta)+len(cerrada)
+    return None, nodos_expandidos
 
 
 def back_tracking(estado_final: Estado):
+    """ Función que se encarga del backtracking desde el nodo final"""
+    # Guardamos el coste energético del último estado
+    coste_energetico = estado_final.gx
+    # Añadimos todos los estados del camino al objectivo a una lista
     estado_actual = estado_final
     camino = []
-    coste_energetico = estado_final.gx
     while estado_actual is not None:
         camino.append(estado_actual)
         estado_actual = estado_actual.padre
-
-    longitud_plan = len(camino)
+    # Le damos la vuelta a la lista para que esté en orden del primero al último
     camino = camino[::-1]
-
+    # Guardamos la longitud de la lista para saber la longitud del plan
+    longitud_plan = len(camino)
     return camino, coste_energetico, longitud_plan
 
 
 def generar_output(camino: [Estado, ], mapa: [[str,],], tiempo, coste, longitud, nodos_expandidos, nombre_mapa, num_h):
-    # Escribimos el archivo de salida con su nomber correspondiente
+    # Escribimos el archivo de salida con su nombre correspondiente
     with open(f"./ASTAR-tests/{nombre_mapa}-{num_h}.output", "w+") as output_file:
         for estado in camino:
             output_file.write((f"({estado.pos_vehiculo[0]},{estado.pos_vehiculo[1]}):"
                                f"{mapa[estado.pos_vehiculo[1]][estado.pos_vehiculo[0]]}:"
                                f"{estado.energia}\n"))
             casilla_actual = mapa[estado.pos_vehiculo[1]][estado.pos_vehiculo[0]]
-            # Usamos el mapa general porque los de cada estado han sida modificados
+            # Usamos el mapa general porque los de cada estado han sida modificádos
             if casilla_actual in ('N', 'C'):
                 mapa[estado.pos_vehiculo[1]][estado.pos_vehiculo[0]] = '1'
 
